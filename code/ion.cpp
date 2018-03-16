@@ -6,12 +6,34 @@ enum token_type
 {
 	Token_EndOfStream,
 	Token_Integer,
+
+	// NOTE(hugo): Operators
 	Token_Mul,
 	Token_Div,
 	Token_Add,
 	Token_BitNot,
 
 	Token_Count,
+};
+
+enum operator_type
+{
+	Op_UnaryMin,
+	Op_UnaryBitNot,
+
+	Op_Mul,
+	Op_Div,
+	Op_Mod,
+	Op_LeftShift,
+	Op_RightShift,
+	Op_BitAnd,
+
+	Op_Add,
+	Op_Sub,
+	Op_BitOr,
+	Op_BitXor,
+
+	Op_Count,
 };
 
 struct token
@@ -21,10 +43,149 @@ struct token
 	char* Text;
 };
 
+internal operator_type
+GetOperator(token_type Token)
+{
+	switch(Token)
+	{
+		case Token_Mul:
+			{
+				return(Op_Mul);
+			} break;
+		case Token_Div:
+			{
+				return(Op_Div);
+			} break;
+		case Token_Add:
+			{
+				return(Op_Add);
+			} break;
+		case Token_BitNot:
+			{
+				return(Op_UnaryBitNot);
+			} break;
+		InvalidDefaultCase;
+	}
+	Assert(false);
+	return(Op_Count);
+}
+
+typedef u8 precedence;
+
+global_variable precedence OpPrecedenceTable[Op_Count] =
+{
+	2, //Op_UnaryMin
+	2, //Op_UnaryBitNot
+
+	1, //Op_Mul
+	1, //Op_Div
+	1, //Op_Mod
+	1, //Op_LeftShift
+	1, //Op_RightShift
+	1, //Op_BitAnd
+
+	0, //Op_Add
+	0, //Op_Sub
+	0, //Op_BitOr
+	0, //Op_BitXor
+};
+
+global_variable bool OpLeftAssocTable[Op_Count] =
+{
+	false, //Op_UnaryMin
+	false, //Op_UnaryBitNot
+
+	true, //Op_Mul
+	true, //Op_Div
+	true, //Op_Mod
+	true, //Op_LeftShift
+	true, //Op_RightShift
+	true, //Op_BitAnd
+
+	true, //Op_Add
+	true, //Op_Sub
+	true, //Op_BitOr
+	true, //Op_BitXor
+};
+
+inline precedence
+OpPrecedence(operator_type Op)
+{
+	precedence Result = OpPrecedenceTable[Op];
+	return(Result);
+}
+
+inline precedence
+OpPrecedence(token Token)
+{
+	operator_type Op = GetOperator(Token.Type);
+	precedence Result = OpPrecedence(Op);
+	return(Result);
+}
+
+inline bool
+IsLeftAssociative(operator_type Op)
+{
+	bool Result = OpLeftAssocTable[Op];
+	return(Result);
+}
+
+inline bool
+IsLeftAssociative(token Token)
+{
+	operator_type Op = GetOperator(Token.Type);
+	bool Result = IsLeftAssociative(Op);
+	return(Result);
+}
+
+inline bool
+IsOperator(token Token)
+{
+	bool Result = (Token.Type == Token_Mul ||
+			Token.Type == Token_Div ||
+			Token.Type == Token_Add ||
+			Token.Type == Token_BitNot);
+	return(Result);
+}
+
 struct tokenizer
 {
 	char* At;
 };
+
+#define MAX_STACK_SIZE 16
+struct token_stack
+{
+	u32 Count;
+	token Stack[MAX_STACK_SIZE];
+};
+
+internal void
+PushTokenStack(token_stack* Stack, token Token)
+{
+	Assert(Stack->Count < ArrayCount(Stack->Stack));
+	Stack->Stack[Stack->Count] = Token;
+	++Stack->Count;
+}
+
+internal token
+PopTokenStack(token_stack* Stack)
+{
+	Assert(Stack->Count != 0);
+	token Result = Stack->Stack[Stack->Count - 1];
+	--Stack->Count;
+
+	return(Result);
+}
+
+internal token
+PeekTokenTop(token_stack* Stack)
+{
+	Assert(Stack->Count != 0);
+	token Result = Stack->Stack[Stack->Count - 1];
+
+	return(Result);
+}
 
 inline bool
 IsEndOfLine(char C)
@@ -128,40 +289,49 @@ s32 main(s32 Arguments, char* ArgumentCount)
 	tokenizer Tokenizer = {};
 	Tokenizer.At = InputStr;
 
+	token_stack OperatorStack = {};
+	token_stack OutputStack = {};
+
 	token Token = {};
 	do
 	{
 		Token = GetToken(&Tokenizer);
-		switch(Token.Type)
+
+		if(Token.Type == Token_Integer)
 		{
-			case Token_EndOfStream:
+			PushTokenStack(&OutputStack, Token);
+		}
+		else if(IsOperator(Token))
+		{
+			if(OperatorStack.Count != 0)
+			{
+				token TopStackOperator = PeekTokenTop(&OperatorStack);
+				while((OpPrecedence(TopStackOperator) > OpPrecedence(Token)) ||
+						(OpPrecedence(TopStackOperator) == OpPrecedence(Token) &&
+						 IsLeftAssociative(TopStackOperator)))
 				{
-					printf("End of stream\n");
-				} break;
-			case Token_Integer:
-				{
-					printf("Integer\n");
-				} break;
-			case Token_Mul:
-				{
-					printf("Mul\n");
-				} break;
-			case Token_Div:
-				{
-					printf("Div\n");
-				} break;
-			case Token_Add:
-				{
-					printf("Add\n");
-				} break;
-			case Token_BitNot:
-				{
-					printf("BitNot\n");
-				} break;
-			InvalidDefaultCase;
+					PopTokenStack(&OperatorStack);
+					PushTokenStack(&OutputStack, TopStackOperator);
+
+					if(OperatorStack.Count == 0)
+					{
+						break;
+					}
+					TopStackOperator = PeekTokenTop(&OperatorStack);
+				}
+
+			}
+			PushTokenStack(&OperatorStack, Token);
 		}
 
 	} while(Token.Type != Token_EndOfStream);
+
+	// NOTE(hugo): Flush the remaning of the operator stack
+	while(OperatorStack.Count != 0)
+	{
+		token OperatorToken = PopTokenStack(&OperatorStack);
+		PushTokenStack(&OutputStack, OperatorToken);
+	}
 
 	return(0);
 }
