@@ -23,6 +23,7 @@ enum token_type
 	Token_BitXor,
 	Token_UnaryMinus,
 	Token_BinaryMinus,
+	Token_Exp,
 
 	Token_Count,
 };
@@ -43,6 +44,8 @@ enum operator_type
 	Op_Sub,
 	Op_BitOr,
 	Op_BitXor,
+
+	Op_Exp,
 
 	Op_Count,
 };
@@ -171,6 +174,10 @@ GetOperatorType(token_type Token)
 			{
 				return(Op_Sub);
 			} break;
+		case Token_Exp:
+			{
+				return(Op_Exp);
+			} break;
 		InvalidDefaultCase;
 	}
 	Assert(false);
@@ -193,6 +200,8 @@ global_variable ion_operator OpTable[Op_Count] =
 	{Op_Sub,         0, OpProp_Binary, true},
 	{Op_BitOr,       0, OpProp_Binary, true},
 	{Op_BitXor,      0, OpProp_Binary, true},
+
+	{Op_Exp,         1, OpProp_Binary, false},
 };
 
 internal ion_operator
@@ -233,7 +242,8 @@ IsOperator(token Token)
 			Token.Type == Token_BitOr ||
 			Token.Type == Token_BitXor ||
 			Token.Type == Token_UnaryMinus ||
-			Token.Type == Token_BinaryMinus);
+			Token.Type == Token_BinaryMinus ||
+			Token.Type == Token_Exp);
 	return(Result);
 }
 
@@ -426,7 +436,17 @@ GetToken(tokenizer* Tokenizer)
 			} break;
 		case '*':
 			{
-				Token.Type = Token_Mul;
+				if(Tokenizer->At &&
+						Tokenizer->At[0] == '*')
+				{
+					Token.Type = Token_Exp;
+					++Token.TextLength;
+					++Tokenizer->At;
+				}
+				else
+				{
+					Token.Type = Token_Mul;
+				}
 			} break;
 		case '/':
 			{
@@ -609,6 +629,10 @@ PrintAst(ast* Ast)
 			{
 				printf("- ");
 			} break;
+		case Token_Exp:
+			{
+				printf("** ");
+			} break;
 		InvalidDefaultCase;
 	}
 
@@ -641,7 +665,7 @@ ShouldPopStack(token CurrentToken, token TopStackToken)
 
 s32 main(s32 Arguments, char** ArgumentCount)
 {
-	char* InputStr = "12*34 * 77 ^ (7865 | 45)/46 - ~25 + 12 + (- 13 + 1) << 3 + - 100 >> 1";
+	char* InputStr = "12*34 * 77 ^ (7865 * (2 ** 2) | 45)/46 - ~25 + 12 + (- 13 + 1) << 3 + - 100 >> 1";
 
 	tokenizer Tokenizer = {};
 	Tokenizer.At = InputStr;
