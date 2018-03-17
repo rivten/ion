@@ -43,6 +43,47 @@ struct token
 	char* Text;
 };
 
+struct ast
+{
+	token Token;
+	ast* Left;
+	ast* Right;
+};
+
+internal ast*
+CreateLeaftAstFromInteger(token Token)
+{
+	Assert(Token.Type = Token_Integer);
+	ast* Result = AllocateStruct(ast);
+	Result->Token = Token;
+	Result->Left = 0;
+	Result->Right = 0;
+
+	return(Result);
+}
+
+internal ast*
+CreateAst(token Token, ast* LeftSubAst, ast* RightSubAst)
+{
+	ast* Result = AllocateStruct(ast);
+	Result->Token = Token;
+	Result->Left = LeftSubAst;
+	Result->Right = RightSubAst;
+
+	return(Result);
+}
+
+internal ast*
+CreateAst(token Token, ast* SubAst)
+{
+	ast* Result = AllocateStruct(ast);
+	Result->Token = Token;
+	Result->Left = SubAst;
+	Result->Right = 0;
+
+	return(Result);
+}
+
 internal operator_type
 GetOperator(token_type Token)
 {
@@ -71,6 +112,12 @@ GetOperator(token_type Token)
 }
 
 typedef u8 precedence;
+
+enum operator_property
+{
+	OpProp_Unary,
+	OpProp_Binary,
+};
 
 global_variable precedence OpPrecedenceTable[Op_Count] =
 {
@@ -106,6 +153,24 @@ global_variable bool OpLeftAssocTable[Op_Count] =
 	true, //Op_Sub
 	true, //Op_BitOr
 	true, //Op_BitXor
+};
+
+global_variable operator_property OpPropertyTable[Op_Count] =
+{
+	OpProp_Unary, //Op_UnaryMin
+	OpProp_Unary, //Op_UnaryBitNot
+
+	OpProp_Binary, //Op_Mul
+	OpProp_Binary, //Op_Div
+	OpProp_Binary, //Op_Mod
+	OpProp_Binary, //Op_LeftShift
+	OpProp_Binary, //Op_RightShift
+	OpProp_Binary, //Op_BitAnd
+
+	OpProp_Binary, //Op_Add
+	OpProp_Binary, //Op_Sub
+	OpProp_Binary, //Op_BitOr
+	OpProp_Binary, //Op_BitXor
 };
 
 inline precedence
@@ -148,6 +213,22 @@ IsOperator(token Token)
 	return(Result);
 }
 
+inline bool
+IsBinary(token Token)
+{
+	operator_type Op = GetOperator(Token.Type);
+	bool Result = (OpPropertyTable[Op] == OpProp_Binary);
+	return(Result);
+}
+
+inline bool
+IsUnary(token Token)
+{
+	operator_type Op = GetOperator(Token.Type);
+	bool Result = (OpPropertyTable[Op] == OpProp_Unary);
+	return(Result);
+}
+
 struct tokenizer
 {
 	char* At;
@@ -185,6 +266,64 @@ PeekTokenTop(token_stack* Stack)
 	token Result = Stack->Stack[Stack->Count - 1];
 
 	return(Result);
+}
+
+struct ast_stack
+{
+	u32 Count;
+	ast* Stack[MAX_STACK_SIZE];
+};
+
+internal void
+PushAstStack(ast_stack* Stack, ast* Ast)
+{
+	Assert(Stack->Count < ArrayCount(Stack->Stack));
+	Stack->Stack[Stack->Count] = Ast;
+	++Stack->Count;
+}
+
+internal ast*
+PopAstStack(ast_stack* Stack)
+{
+	Assert(Stack->Count != 0);
+	ast* Result = Stack->Stack[Stack->Count - 1];
+	--Stack->Count;
+
+	return(Result);
+}
+
+internal ast*
+PeekAstTop(ast_stack* Stack)
+{
+	Assert(Stack->Count != 0);
+	ast* Result = Stack->Stack[Stack->Count - 1];
+
+	return(Result);
+}
+
+internal void
+PushTokenToAstStack(ast_stack* Stack, token Token)
+{
+	ast* Ast = 0;
+	if(IsBinary(Token))
+	{
+		ast* RightSubAst = PopAstStack(Stack);
+		ast* LeftSubAst = PopAstStack(Stack);
+
+		Ast = CreateAst(Token, LeftSubAst, RightSubAst);
+	}
+	else if(IsUnary(Token))
+	{
+		ast* SubAst = PopAstStack(Stack);
+		Ast = CreateAst(Token, SubAst);
+	}
+	else
+	{
+		InvalidCodePath;
+	}
+
+	Assert(Ast);
+	PushAstStack(Stack, Ast);
 }
 
 inline bool
@@ -282,7 +421,65 @@ GetToken(tokenizer* Tokenizer)
 	return(Token);
 }
 
-s32 main(s32 Arguments, char* ArgumentCount)
+internal u32
+GetIntegerValue(token Token)
+{
+	Assert(Token.Type == Token_Integer);
+
+	u32 Result = 0;
+	for(u32 Index = 0; Index < Token.TextLength; ++Index)
+	{
+		u8 Figure = Token.Text[Index] - '0';
+		Result *= 10;
+		Result += Figure;
+	}
+
+	return(Result);
+}
+
+internal void
+PrintAst(ast* Ast)
+{
+	token Token = Ast->Token;
+	printf("(");
+	switch(Token.Type)
+	{
+		case Token_Integer:
+			{
+				u32 IntValue = GetIntegerValue(Token);
+				printf("%u", IntValue);
+			} break;
+		case Token_Mul:
+			{
+				printf("* ");
+			} break;
+		case Token_Div:
+			{
+				printf("/ ");
+			} break;
+		case Token_Add:
+			{
+				printf("+ ");
+			} break;
+		case Token_BitNot:
+			{
+				printf("~ ");
+			} break;
+		InvalidDefaultCase;
+	}
+
+	if(Ast->Left)
+	{
+		PrintAst(Ast->Left);
+	}
+	if(Ast->Right)
+	{
+		PrintAst(Ast->Right);
+	}
+	printf(")");
+}
+
+s32 main(s32 Arguments, char** ArgumentCount)
 {
 	char* InputStr = "12*34 + 45/46 + ~25";
 
@@ -290,7 +487,7 @@ s32 main(s32 Arguments, char* ArgumentCount)
 	Tokenizer.At = InputStr;
 
 	token_stack OperatorStack = {};
-	token_stack OutputStack = {};
+	ast_stack OutputStack = {};
 
 	token Token = {};
 	do
@@ -299,7 +496,8 @@ s32 main(s32 Arguments, char* ArgumentCount)
 
 		if(Token.Type == Token_Integer)
 		{
-			PushTokenStack(&OutputStack, Token);
+			ast* Leaf = CreateLeaftAstFromInteger(Token);
+			PushAstStack(&OutputStack, Leaf);
 		}
 		else if(IsOperator(Token))
 		{
@@ -311,7 +509,7 @@ s32 main(s32 Arguments, char* ArgumentCount)
 						 IsLeftAssociative(TopStackOperator)))
 				{
 					PopTokenStack(&OperatorStack);
-					PushTokenStack(&OutputStack, TopStackOperator);
+					PushTokenToAstStack(&OutputStack, TopStackOperator);
 
 					if(OperatorStack.Count == 0)
 					{
@@ -330,8 +528,13 @@ s32 main(s32 Arguments, char* ArgumentCount)
 	while(OperatorStack.Count != 0)
 	{
 		token OperatorToken = PopTokenStack(&OperatorStack);
-		PushTokenStack(&OutputStack, OperatorToken);
+		PushTokenToAstStack(&OutputStack, OperatorToken);
 	}
+
+	Assert(OutputStack.Count == 1);
+	ast* Ast = PopAstStack(&OutputStack);
+	PrintAst(Ast);
+	printf("\n");
 
 	return(0);
 }
