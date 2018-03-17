@@ -12,6 +12,14 @@ enum token_type
 	Token_Div,
 	Token_Add,
 	Token_BitNot,
+	Token_Mod,
+	Token_LeftShift,
+	Token_RightShift,
+	Token_BitAnd,
+	Token_BitOr,
+	Token_BitXor,
+	Token_UnaryMinus,
+	Token_BinaryMinus,
 
 	Token_Count,
 };
@@ -105,6 +113,38 @@ GetOperator(token_type Token)
 			{
 				return(Op_UnaryBitNot);
 			} break;
+		case Token_Mod:
+			{
+				return(Op_Mod);
+			} break;
+		case Token_LeftShift:
+			{
+				return(Op_LeftShift);
+			} break;
+		case Token_RightShift:
+			{
+				return(Op_RightShift);
+			} break;
+		case Token_BitAnd:
+			{
+				return(Op_BitAnd);
+			} break;
+		case Token_BitOr:
+			{
+				return(Op_BitOr);
+			} break;
+		case Token_BitXor:
+			{
+				return(Op_BitXor);
+			} break;
+		case Token_UnaryMinus:
+			{
+				return(Op_UnaryMin);
+			} break;
+		case Token_BinaryMinus:
+			{
+				return(Op_Sub);
+			} break;
 		InvalidDefaultCase;
 	}
 	Assert(false);
@@ -119,64 +159,35 @@ enum operator_property
 	OpProp_Binary,
 };
 
-global_variable precedence OpPrecedenceTable[Op_Count] =
+struct ion_operator
 {
-	2, //Op_UnaryMin
-	2, //Op_UnaryBitNot
-
-	1, //Op_Mul
-	1, //Op_Div
-	1, //Op_Mod
-	1, //Op_LeftShift
-	1, //Op_RightShift
-	1, //Op_BitAnd
-
-	0, //Op_Add
-	0, //Op_Sub
-	0, //Op_BitOr
-	0, //Op_BitXor
+	precedence Precedence;
+	operator_property Property;
+	bool IsLeftAssociative;
 };
 
-global_variable bool OpLeftAssocTable[Op_Count] =
+global_variable ion_operator OpTable[Op_Count] = 
 {
-	false, //Op_UnaryMin
-	false, //Op_UnaryBitNot
+	{2, OpProp_Unary, false}, //Op_UnaryMin
+	{2, OpProp_Unary, false}, //Op_UnaryBitNot
 
-	true, //Op_Mul
-	true, //Op_Div
-	true, //Op_Mod
-	true, //Op_LeftShift
-	true, //Op_RightShift
-	true, //Op_BitAnd
+	{1, OpProp_Binary, true}, //Op_Mul
+	{1, OpProp_Binary, true}, //Op_Div
+	{1, OpProp_Binary, true}, //Op_Mod
+	{1, OpProp_Binary, true}, //Op_LeftShift
+	{1, OpProp_Binary, true}, //Op_RightShift
+	{1, OpProp_Binary, true}, //Op_BitAnd
 
-	true, //Op_Add
-	true, //Op_Sub
-	true, //Op_BitOr
-	true, //Op_BitXor
-};
-
-global_variable operator_property OpPropertyTable[Op_Count] =
-{
-	OpProp_Unary, //Op_UnaryMin
-	OpProp_Unary, //Op_UnaryBitNot
-
-	OpProp_Binary, //Op_Mul
-	OpProp_Binary, //Op_Div
-	OpProp_Binary, //Op_Mod
-	OpProp_Binary, //Op_LeftShift
-	OpProp_Binary, //Op_RightShift
-	OpProp_Binary, //Op_BitAnd
-
-	OpProp_Binary, //Op_Add
-	OpProp_Binary, //Op_Sub
-	OpProp_Binary, //Op_BitOr
-	OpProp_Binary, //Op_BitXor
+	{0, OpProp_Binary, true}, //Op_Add
+	{0, OpProp_Binary, true}, //Op_Sub
+	{0, OpProp_Binary, true}, //Op_BitOr
+	{0, OpProp_Binary, true}, //Op_BitXor
 };
 
 inline precedence
 OpPrecedence(operator_type Op)
 {
-	precedence Result = OpPrecedenceTable[Op];
+	precedence Result = OpTable[Op].Precedence;
 	return(Result);
 }
 
@@ -191,7 +202,7 @@ OpPrecedence(token Token)
 inline bool
 IsLeftAssociative(operator_type Op)
 {
-	bool Result = OpLeftAssocTable[Op];
+	bool Result = OpTable[Op].IsLeftAssociative;
 	return(Result);
 }
 
@@ -209,7 +220,15 @@ IsOperator(token Token)
 	bool Result = (Token.Type == Token_Mul ||
 			Token.Type == Token_Div ||
 			Token.Type == Token_Add ||
-			Token.Type == Token_BitNot);
+			Token.Type == Token_BitNot ||
+			Token.Type == Token_Mod ||
+			Token.Type == Token_LeftShift ||
+			Token.Type == Token_RightShift ||
+			Token.Type == Token_BitAnd ||
+			Token.Type == Token_BitOr ||
+			Token.Type == Token_BitXor ||
+			Token.Type == Token_UnaryMinus ||
+			Token.Type == Token_BinaryMinus);
 	return(Result);
 }
 
@@ -217,7 +236,7 @@ inline bool
 IsBinary(token Token)
 {
 	operator_type Op = GetOperator(Token.Type);
-	bool Result = (OpPropertyTable[Op] == OpProp_Binary);
+	bool Result = (OpTable[Op].Property == OpProp_Binary);
 	return(Result);
 }
 
@@ -225,13 +244,25 @@ inline bool
 IsUnary(token Token)
 {
 	operator_type Op = GetOperator(Token.Type);
-	bool Result = (OpPropertyTable[Op] == OpProp_Unary);
+	bool Result = (OpTable[Op].Property == OpProp_Unary);
 	return(Result);
 }
 
 struct tokenizer
 {
 	char* At;
+
+	// NOTE(hugo): Note very clean but will
+	// do the trick. The main use is to
+	// differentiate between unary minus
+	// and binary minus by remembering our
+	// current context with the grammar :
+	// E -> E { B E }
+	// E -> U E
+	// E -> Integer
+	// B -> any binary operator
+	// U -> any unary operator
+	token PreviousToken;
 };
 
 #define MAX_STACK_SIZE 16
@@ -398,6 +429,63 @@ GetToken(tokenizer* Tokenizer)
 			{
 				Token.Type = Token_Add;
 			} break;
+		case '%':
+			{
+				Token.Type = Token_Mod;
+			} break;
+		case '<':
+			{
+				Assert(Tokenizer->At);
+				if(Tokenizer->At[0] == '<')
+				{
+					Token.Type = Token_LeftShift;
+					++Tokenizer->At;
+				}
+				else
+				{
+					InvalidCodePath;
+				}
+			} break;
+		case '>':
+			{
+				Assert(Tokenizer->At);
+				if(Tokenizer->At[0] == '>')
+				{
+					Token.Type = Token_RightShift;
+					++Tokenizer->At;
+				}
+				else
+				{
+					InvalidCodePath;
+				}
+			} break;
+		case '&':
+			{
+				Token.Type = Token_BitAnd;
+			} break;
+		case '|':
+			{
+				Token.Type = Token_BitOr;
+			} break;
+		case '^':
+			{
+				Token.Type = Token_BitXor;
+			} break;
+		case '-':
+			{
+				// NOTE(hugo): IMPORTANT(hugo):
+				// This works even for the first token
+				// because an uninitialized token will have the type
+				// Token_EndOfStream which is not an operator.
+				if(IsOperator(Tokenizer->PreviousToken))
+				{
+					Token.Type = Token_UnaryMinus;
+				}
+				else
+				{
+					Token.Type = Token_BinaryMinus;
+				}
+			} break;
 
 		default:
 			{
@@ -418,6 +506,7 @@ GetToken(tokenizer* Tokenizer)
 			} break;
 	}
 
+	Tokenizer->PreviousToken = Token;
 	return(Token);
 }
 
@@ -465,6 +554,35 @@ PrintAst(ast* Ast)
 			{
 				printf("~ ");
 			} break;
+		case Token_Mod:
+			{
+				printf("%% ");
+			} break;
+		case Token_LeftShift:
+			{
+				printf("<< ");
+			} break;
+		case Token_RightShift:
+			{
+				printf(">> ");
+			} break;
+		case Token_BitAnd:
+			{
+				printf("& ");
+			} break;
+		case Token_BitOr:
+			{
+				printf("| ");
+			} break;
+		case Token_BitXor:
+			{
+				printf("^ ");
+			} break;
+		case Token_UnaryMinus:
+		case Token_BinaryMinus:
+			{
+				printf("- ");
+			} break;
 		InvalidDefaultCase;
 	}
 
@@ -481,7 +599,7 @@ PrintAst(ast* Ast)
 
 s32 main(s32 Arguments, char** ArgumentCount)
 {
-	char* InputStr = "12*34 + 45/46 + ~25";
+	char* InputStr = "12*34 * 77 ^ 7865 | 45/46 - ~25 + 12 + - 13 + 1 << 3 + - 100 >> 1";
 
 	tokenizer Tokenizer = {};
 	Tokenizer.At = InputStr;
