@@ -7,6 +7,9 @@ enum token_type
 	Token_EndOfStream,
 	Token_Integer,
 
+	Token_LeftParenthesis,
+	Token_RightParenthesis,
+
 	// NOTE(hugo): Operators
 	Token_Mul,
 	Token_Div,
@@ -231,6 +234,14 @@ IsOperator(token Token)
 			Token.Type == Token_BitXor ||
 			Token.Type == Token_UnaryMinus ||
 			Token.Type == Token_BinaryMinus);
+	return(Result);
+}
+
+inline bool
+IsParenthesis(token Token)
+{
+	bool Result = (Token.Type == Token_LeftParenthesis ||
+			Token.Type == Token_RightParenthesis);
 	return(Result);
 }
 
@@ -479,7 +490,8 @@ GetToken(tokenizer* Tokenizer)
 				// This works even for the first token
 				// because an uninitialized token will have the type
 				// Token_EndOfStream which is not an operator.
-				if(IsOperator(Tokenizer->PreviousToken))
+				if(IsOperator(Tokenizer->PreviousToken) ||
+						IsParenthesis(Tokenizer->PreviousToken))
 				{
 					Token.Type = Token_UnaryMinus;
 				}
@@ -487,6 +499,14 @@ GetToken(tokenizer* Tokenizer)
 				{
 					Token.Type = Token_BinaryMinus;
 				}
+			} break;
+		case '(':
+			{
+				Token.Type = Token_LeftParenthesis;
+			} break;
+		case ')':
+			{
+				Token.Type = Token_RightParenthesis;
 			} break;
 
 		default:
@@ -603,9 +623,25 @@ PrintAst(ast* Ast)
 	printf(")");
 }
 
+internal bool
+ShouldPopStack(token CurrentToken, token TopStackToken)
+{
+	if(TopStackToken.Type == Token_LeftParenthesis)
+	{
+		return(false);
+	}
+	else
+	{
+		bool Result = (((OpPrecedence(TopStackToken) > OpPrecedence(CurrentToken)) ||
+						(OpPrecedence(TopStackToken) == OpPrecedence(CurrentToken) &&
+						 IsLeftAssociative(TopStackToken))));
+		return(Result);
+	}
+}
+
 s32 main(s32 Arguments, char** ArgumentCount)
 {
-	char* InputStr = "12*34 * 77 ^ 7865 | 45/46 - ~25 + 12 + - 13 + 1 << 3 + - 100 >> 1";
+	char* InputStr = "12*34 * 77 ^ (7865 | 45)/46 - ~25 + 12 + (- 13 + 1) << 3 + - 100 >> 1";
 
 	tokenizer Tokenizer = {};
 	Tokenizer.At = InputStr;
@@ -627,23 +663,37 @@ s32 main(s32 Arguments, char** ArgumentCount)
 		{
 			if(OperatorStack.Count != 0)
 			{
-				token TopStackOperator = PeekTokenTop(&OperatorStack);
-				while((OpPrecedence(TopStackOperator) > OpPrecedence(Token)) ||
-						(OpPrecedence(TopStackOperator) == OpPrecedence(Token) &&
-						 IsLeftAssociative(TopStackOperator)))
+				token TopStackToken = PeekTokenTop(&OperatorStack);
+
+				while(ShouldPopStack(Token, TopStackToken))
 				{
+					Assert(IsOperator(TopStackToken));
 					PopTokenStack(&OperatorStack);
-					PushTokenToAstStack(&OutputStack, TopStackOperator);
+					PushTokenToAstStack(&OutputStack, TopStackToken);
 
 					if(OperatorStack.Count == 0)
 					{
 						break;
 					}
-					TopStackOperator = PeekTokenTop(&OperatorStack);
+					TopStackToken = PeekTokenTop(&OperatorStack);
 				}
 
 			}
 			PushTokenStack(&OperatorStack, Token);
+		}
+		else if(Token.Type == Token_LeftParenthesis)
+		{
+			PushTokenStack(&OperatorStack, Token);
+		}
+		else if(Token.Type == Token_RightParenthesis)
+		{
+			for(token TopStackToken = PopTokenStack(&OperatorStack);
+					TopStackToken.Type != Token_LeftParenthesis;
+					TopStackToken = PopTokenStack(&OperatorStack))
+			{
+				Assert(IsOperator(TopStackToken));
+				PushTokenToAstStack(&OutputStack, TopStackToken);
+			}
 		}
 
 	} while(Token.Type != Token_EndOfStream);
