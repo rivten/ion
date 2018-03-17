@@ -44,11 +44,34 @@ enum operator_type
 	Op_Count,
 };
 
+typedef u8 precedence;
+
+enum operator_property
+{
+	OpProp_Unary,
+	OpProp_Binary,
+};
+
+struct ion_operator
+{
+	operator_type Type;
+	precedence Precedence;
+	operator_property Property;
+	bool IsLeftAssociative;
+};
+
 struct token
 {
 	token_type Type;
 	u32 TextLength;
 	char* Text;
+
+	union
+	{
+		u32 IntegerValue;
+
+		operator_type Operator;
+	};
 };
 
 struct ast
@@ -93,7 +116,7 @@ CreateAst(token Token, ast* SubAst)
 }
 
 internal operator_type
-GetOperator(token_type Token)
+GetOperatorType(token_type Token)
 {
 	switch(Token)
 	{
@@ -151,66 +174,45 @@ GetOperator(token_type Token)
 	return(Op_Count);
 }
 
-typedef u8 precedence;
-
-enum operator_property
-{
-	OpProp_Unary,
-	OpProp_Binary,
-};
-
-struct ion_operator
-{
-	precedence Precedence;
-	operator_property Property;
-	bool IsLeftAssociative;
-};
-
 global_variable ion_operator OpTable[Op_Count] = 
 {
-	{2, OpProp_Unary, false}, //Op_UnaryMin
-	{2, OpProp_Unary, false}, //Op_UnaryBitNot
+	{Op_UnaryMin,    2, OpProp_Unary, false},
+	{Op_UnaryBitNot, 2, OpProp_Unary, false},
 
-	{1, OpProp_Binary, true}, //Op_Mul
-	{1, OpProp_Binary, true}, //Op_Div
-	{1, OpProp_Binary, true}, //Op_Mod
-	{1, OpProp_Binary, true}, //Op_LeftShift
-	{1, OpProp_Binary, true}, //Op_RightShift
-	{1, OpProp_Binary, true}, //Op_BitAnd
+	{Op_Mul,         1, OpProp_Binary, true},
+	{Op_Div,         1, OpProp_Binary, true},
+	{Op_Mod,         1, OpProp_Binary, true},
+	{Op_LeftShift,   1, OpProp_Binary, true},
+	{Op_RightShift,  1, OpProp_Binary, true},
+	{Op_BitAnd,      1, OpProp_Binary, true},
 
-	{0, OpProp_Binary, true}, //Op_Add
-	{0, OpProp_Binary, true}, //Op_Sub
-	{0, OpProp_Binary, true}, //Op_BitOr
-	{0, OpProp_Binary, true}, //Op_BitXor
+	{Op_Add,         0, OpProp_Binary, true},
+	{Op_Sub,         0, OpProp_Binary, true},
+	{Op_BitOr,       0, OpProp_Binary, true},
+	{Op_BitXor,      0, OpProp_Binary, true},
 };
 
-inline precedence
-OpPrecedence(operator_type Op)
+internal ion_operator
+GetOperator(token_type Token)
 {
-	precedence Result = OpTable[Op].Precedence;
+	ion_operator Result = {};
+	operator_type OpType = GetOperatorType(Token);
+	Result = OpTable[OpType];
+
 	return(Result);
 }
 
 inline precedence
 OpPrecedence(token Token)
 {
-	operator_type Op = GetOperator(Token.Type);
-	precedence Result = OpPrecedence(Op);
-	return(Result);
-}
-
-inline bool
-IsLeftAssociative(operator_type Op)
-{
-	bool Result = OpTable[Op].IsLeftAssociative;
+	precedence Result = OpTable[Token.Operator].Precedence;
 	return(Result);
 }
 
 inline bool
 IsLeftAssociative(token Token)
 {
-	operator_type Op = GetOperator(Token.Type);
-	bool Result = IsLeftAssociative(Op);
+	bool Result = OpTable[Token.Operator].IsLeftAssociative;
 	return(Result);
 }
 
@@ -235,16 +237,14 @@ IsOperator(token Token)
 inline bool
 IsBinary(token Token)
 {
-	operator_type Op = GetOperator(Token.Type);
-	bool Result = (OpTable[Op].Property == OpProp_Binary);
+	bool Result = (OpTable[Token.Operator].Property == OpProp_Binary);
 	return(Result);
 }
 
 inline bool
 IsUnary(token Token)
 {
-	operator_type Op = GetOperator(Token.Type);
-	bool Result = (OpTable[Op].Property == OpProp_Unary);
+	bool Result = (OpTable[Token.Operator].Property == OpProp_Unary);
 	return(Result);
 }
 
@@ -439,6 +439,7 @@ GetToken(tokenizer* Tokenizer)
 				if(Tokenizer->At[0] == '<')
 				{
 					Token.Type = Token_LeftShift;
+					++Token.TextLength;
 					++Tokenizer->At;
 				}
 				else
@@ -452,6 +453,7 @@ GetToken(tokenizer* Tokenizer)
 				if(Tokenizer->At[0] == '>')
 				{
 					Token.Type = Token_RightShift;
+					++Token.TextLength;
 					++Tokenizer->At;
 				}
 				else
@@ -492,8 +494,11 @@ GetToken(tokenizer* Tokenizer)
 				if(IsNumeric(C))
 				{
 					Token.Type = Token_Integer;
+					Token.IntegerValue = (C - '0');
 					while(IsNumeric(Tokenizer->At[0]))
 					{
+						Token.IntegerValue *= 10;
+						Token.IntegerValue += (Tokenizer->At[0] - '0');
 						++Token.TextLength;
 						++Tokenizer->At;
 					}
@@ -504,6 +509,13 @@ GetToken(tokenizer* Tokenizer)
 					InvalidCodePath;
 				}
 			} break;
+
+		
+	}
+
+	if(IsOperator(Token))
+	{
+		Token.Operator = GetOperatorType(Token.Type);
 	}
 
 	Tokenizer->PreviousToken = Token;
@@ -515,13 +527,7 @@ GetIntegerValue(token Token)
 {
 	Assert(Token.Type == Token_Integer);
 
-	u32 Result = 0;
-	for(u32 Index = 0; Index < Token.TextLength; ++Index)
-	{
-		u8 Figure = Token.Text[Index] - '0';
-		Result *= 10;
-		Result += Figure;
-	}
+	u32 Result = Token.IntegerValue;
 
 	return(Result);
 }
@@ -648,6 +654,16 @@ s32 main(s32 Arguments, char** ArgumentCount)
 		token OperatorToken = PopTokenStack(&OperatorStack);
 		PushTokenToAstStack(&OutputStack, OperatorToken);
 	}
+
+#if 0
+	printf("%u\n", OutputStack.Count);
+	for(u32 AstIndex = 0; AstIndex < OutputStack.Count; ++AstIndex)
+	{
+		ast* Ast = OutputStack.Stack[AstIndex];
+		PrintAst(Ast);
+		printf("\n");
+	}
+#endif
 
 	Assert(OutputStack.Count == 1);
 	ast* Ast = PopAstStack(&OutputStack);
