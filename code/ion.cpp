@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 
 #include <rivten.h>
 
@@ -102,6 +103,8 @@ CreateLeaftAstFromInteger(token Token)
 internal ast*
 CreateAst(token Token, ast* LeftSubAst, ast* RightSubAst)
 {
+	Assert(LeftSubAst);
+	Assert(RightSubAst);
 	ast* Result = AllocateStruct(ast);
 	Result->Token = Token;
 	Result->Left = LeftSubAst;
@@ -113,6 +116,7 @@ CreateAst(token Token, ast* LeftSubAst, ast* RightSubAst)
 internal ast*
 CreateAst(token Token, ast* SubAst)
 {
+	Assert(SubAst);
 	ast* Result = AllocateStruct(ast);
 	Result->Token = Token;
 	Result->Left = SubAst;
@@ -245,6 +249,103 @@ IsOperator(token Token)
 			Token.Type == Token_BinaryMinus ||
 			Token.Type == Token_Exp);
 	return(Result);
+}
+
+internal s32
+AstEvaluate(ast* Ast)
+{
+	Assert(Ast);
+	token Token = Ast->Token;
+	if(Token.Type == Token_Integer)
+	{
+		return(Token.IntegerValue);
+	}
+	else if(IsOperator(Token))
+	{
+		switch(Token.Operator)
+		{
+			case Op_UnaryMin:
+				{
+					s32 SubValue = AstEvaluate(Ast->Left);
+					return(-SubValue);
+				} break;
+			case Op_UnaryBitNot:
+				{
+					s32 SubValue = AstEvaluate(Ast->Left);
+					return(~SubValue);
+				} break;
+			case Op_Mul:
+				{
+					s32 LeftValue = AstEvaluate(Ast->Left);
+					s32 RightValue = AstEvaluate(Ast->Right);
+					return(LeftValue * RightValue);
+				} break;
+			case Op_Div:
+				{
+					s32 LeftValue = AstEvaluate(Ast->Left);
+					s32 RightValue = AstEvaluate(Ast->Right);
+					return(LeftValue / RightValue);
+				} break;
+			case Op_Mod:
+				{
+					s32 LeftValue = AstEvaluate(Ast->Left);
+					s32 RightValue = AstEvaluate(Ast->Right);
+					return(LeftValue % RightValue);
+				} break;
+			case Op_LeftShift:
+				{
+					s32 LeftValue = AstEvaluate(Ast->Left);
+					s32 RightValue = AstEvaluate(Ast->Right);
+					return(LeftValue << RightValue);
+				} break;
+			case Op_RightShift:
+				{
+					s32 LeftValue = AstEvaluate(Ast->Left);
+					s32 RightValue = AstEvaluate(Ast->Right);
+					return(LeftValue >> RightValue);
+				} break;
+			case Op_BitAnd:
+				{
+					s32 LeftValue = AstEvaluate(Ast->Left);
+					s32 RightValue = AstEvaluate(Ast->Right);
+					return(LeftValue & RightValue);
+				} break;
+			case Op_Add:
+				{
+					s32 LeftValue = AstEvaluate(Ast->Left);
+					s32 RightValue = AstEvaluate(Ast->Right);
+					return(LeftValue + RightValue);
+				} break;
+			case Op_Sub:
+				{
+					s32 LeftValue = AstEvaluate(Ast->Left);
+					s32 RightValue = AstEvaluate(Ast->Right);
+					return(LeftValue - RightValue);
+				} break;
+			case Op_BitOr:
+				{
+					s32 LeftValue = AstEvaluate(Ast->Left);
+					s32 RightValue = AstEvaluate(Ast->Right);
+					return(LeftValue | RightValue);
+				} break;
+			case Op_BitXor:
+				{
+					s32 LeftValue = AstEvaluate(Ast->Left);
+					s32 RightValue = AstEvaluate(Ast->Right);
+					return(LeftValue ^ RightValue);
+				} break;
+			case Op_Exp:
+				{
+					s32 LeftValue = AstEvaluate(Ast->Left);
+					s32 RightValue = AstEvaluate(Ast->Right);
+					s32 Result = (s32)(pow(LeftValue, RightValue));
+					return(Result);
+				} break;
+			InvalidDefaultCase;
+		}
+	}
+	InvalidCodePath;
+	return(0);
 }
 
 inline bool
@@ -741,8 +842,13 @@ s32 main(s32 Arguments, char** ArgumentCount)
 
 	Assert(OutputStack.Count == 1);
 	ast* Ast = PopAstStack(&OutputStack);
+#if 0
 	PrintAst(Ast);
 	printf("\n");
+#else
+	s32 AstValue = AstEvaluate(Ast);
+	printf("Value = %i\n", AstValue);
+#endif
 
 	return(0);
 }
