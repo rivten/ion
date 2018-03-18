@@ -51,7 +51,7 @@ AstEvaluate(ast* Ast)
 	token Token = Ast->Token;
 	if(Token.Type == Token_Integer)
 	{
-		return(Token.IntegerValue);
+		return((s32)(Token.IntegerValue));
 	}
 	else if(IsOperator(Token))
 	{

@@ -104,3 +104,87 @@ IonEvaluate(char* Str)
 	s32 Result = AstEvaluate(Ast);
 	return(Result);
 }
+
+internal u32
+IonGetBytecodeByteSize(ast* Ast)
+{
+	Assert(Ast);
+	u32 Result = 0;
+	if(Ast->Token.Type == Token_Integer)
+	{
+		// NOTE(hugo): We need the LIT and the actual number
+		Result = sizeof(u32) + sizeof(u8);
+	}
+	else
+	{
+		Assert(IsOperator(Ast->Token));
+		Result = sizeof(u8);
+	}
+
+	if(Ast->Left)
+	{
+		Result += IonGetBytecodeByteSize(Ast->Left);
+	}
+	if(Ast->Right)
+	{
+		Result += IonGetBytecodeByteSize(Ast->Right);
+	}
+
+	return(Result);
+}
+
+internal u8*
+IonWriteBytecode(ast* Ast, u8* Bytecode)
+{
+	Assert(Ast);
+	u8* CurrentBytecodePos = Bytecode;
+	if(Ast->Left)
+	{
+		CurrentBytecodePos = IonWriteBytecode(Ast->Left, CurrentBytecodePos);
+	}
+	if(Ast->Right)
+	{
+		CurrentBytecodePos = IonWriteBytecode(Ast->Right, CurrentBytecodePos);
+	}
+
+	if(Ast->Token.Type == Token_Integer)
+	{
+		*CurrentBytecodePos = Opcode_Lit;
+		++CurrentBytecodePos;
+
+		u32* IntBytecode = (u32*) CurrentBytecodePos;
+		*IntBytecode = Ast->Token.IntegerValue;
+		CurrentBytecodePos += sizeof(u32);
+	}
+	else
+	{
+		Assert(IsOperator(Ast->Token));
+		operator_type Op = Ast->Token.Operator;
+		opcode Opcode = GetOpcode(Op);
+
+		*CurrentBytecodePos = (u8)(Opcode);
+		++CurrentBytecodePos;
+	}
+
+	return(CurrentBytecodePos);
+}
+
+internal u8*
+IonGenerateBytecode(ast* Ast)
+{
+	Assert(Ast);
+	u32 HaltSize = 1; // NOTE(hugo): Need to add the size to halt
+
+	// TODO(hugo): Here we do another pass on the AST which can be avoided.
+	// Everything could theoritically be done directly in the shunting yard algorithm
+	// but since there are no perf constraints now, I just did the fastest thing.
+	// Maybe improve this in the future.
+	u32 BytecodeSize = IonGetBytecodeByteSize(Ast) + HaltSize;
+	u8* Bytecode = AllocateArray(u8, BytecodeSize);
+
+	IonWriteBytecode(Ast, Bytecode);
+	
+	Bytecode[BytecodeSize - 1] = (u8)(Opcode_Halt);
+
+	return(Bytecode);
+}

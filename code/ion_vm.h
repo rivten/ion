@@ -46,9 +46,11 @@ IonVMExecute(u8* Bytecode)
 					u32 Value = *((u32*)Bytecode);
 					Bytecode += sizeof(u32);
 					PushS32Stack(&Stack, (s32)Value);
+					//printf("LIT %u\n", Value);
 				} break;
 			case Opcode_Halt:
 				{
+					//printf("HALT\n");
 					Running = false;
 				} break;
 
@@ -56,47 +58,55 @@ IonVMExecute(u8* Bytecode)
 				{
 					s32 Value = PopS32Stack(&Stack);
 					PushS32Stack(&Stack, -Value);
+					//printf("NEG\n");
 				} break;
 			case Opcode_UnaryBitNot:
 				{
 					s32 Value = PopS32Stack(&Stack);
 					PushS32Stack(&Stack, ~Value);
+					//printf("BITNOT\n");
 				} break;
 			case Opcode_Mul:
 				{
 					s32 RightValue = PopS32Stack(&Stack);
 					s32 LeftValue = PopS32Stack(&Stack);
-					PushS32Stack(&Stack, LeftValue + RightValue);
+					PushS32Stack(&Stack, LeftValue * RightValue);
+					//printf("MUL\n");
 				} break;
 			case Opcode_Div:
 				{
 					s32 RightValue = PopS32Stack(&Stack);
 					s32 LeftValue = PopS32Stack(&Stack);
 					PushS32Stack(&Stack, LeftValue / RightValue);
+					//printf("DIV\n");
 				} break;
 			case Opcode_Mod:
 				{
 					s32 RightValue = PopS32Stack(&Stack);
 					s32 LeftValue = PopS32Stack(&Stack);
 					PushS32Stack(&Stack, LeftValue % RightValue);
+					//printf("MOD\n");
 				} break;
 			case Opcode_LeftShift:
 				{
 					s32 RightValue = PopS32Stack(&Stack);
 					s32 LeftValue = PopS32Stack(&Stack);
 					PushS32Stack(&Stack, LeftValue << RightValue);
+					//printf("LSHIFT\n");
 				} break;
 			case Opcode_RightShift:
 				{
 					s32 RightValue = PopS32Stack(&Stack);
 					s32 LeftValue = PopS32Stack(&Stack);
 					PushS32Stack(&Stack, LeftValue >> RightValue);
+					//printf("RSHIFT\n");
 				} break;
 			case Opcode_BitAnd:
 				{
 					s32 RightValue = PopS32Stack(&Stack);
 					s32 LeftValue = PopS32Stack(&Stack);
 					PushS32Stack(&Stack, LeftValue & RightValue);
+					//printf("AND\n");
 				} break;
 
 			case Opcode_Add:
@@ -104,24 +114,28 @@ IonVMExecute(u8* Bytecode)
 					s32 RightValue = PopS32Stack(&Stack);
 					s32 LeftValue = PopS32Stack(&Stack);
 					PushS32Stack(&Stack, LeftValue + RightValue);
+					//printf("ADD\n");
 				} break;
 			case Opcode_Sub:
 				{
 					s32 RightValue = PopS32Stack(&Stack);
 					s32 LeftValue = PopS32Stack(&Stack);
 					PushS32Stack(&Stack, LeftValue - RightValue);
+					//printf("SUB\n");
 				} break;
 			case Opcode_BitOr:
 				{
 					s32 RightValue = PopS32Stack(&Stack);
 					s32 LeftValue = PopS32Stack(&Stack);
 					PushS32Stack(&Stack, LeftValue | RightValue);
+					//printf("OR\n");
 				} break;
 			case Opcode_BitXor:
 				{
 					s32 RightValue = PopS32Stack(&Stack);
 					s32 LeftValue = PopS32Stack(&Stack);
 					PushS32Stack(&Stack, LeftValue ^ RightValue);
+					//printf("XOR\n");
 				} break;
 			case Opcode_Exp:
 				{
@@ -129,6 +143,7 @@ IonVMExecute(u8* Bytecode)
 					s32 LeftValue = PopS32Stack(&Stack);
 					s32 Value = (s32)(pow(LeftValue, RightValue));
 					PushS32Stack(&Stack, Value);
+					//printf("EXP\n");
 				} break;
 			InvalidDefaultCase;
 		}
