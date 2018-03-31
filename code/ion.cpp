@@ -5,7 +5,6 @@
 
 #include "ion_lexer.h"
 #include "ion_ast.h"
-#include "ion_stack.h"
 #include "ion_opcode.h"
 #include "ion_parser.h"
 #include "ion_vm.h"

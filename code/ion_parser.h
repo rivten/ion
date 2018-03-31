@@ -119,12 +119,23 @@ internal ast*
 ParseExpr3(lexer* Lexer)
 {
 	ast* Result = 0;
-	if(IsToken(Lexer, Token_UnaryMinus) ||
+	if(IsToken(Lexer, Token_Minus) ||
 			IsToken(Lexer, Token_BitNot))
 	{
 		Result = AllocateStruct(ast);
 		Result->Token = ReadToken(Lexer);
-		Assert(Result->Token.Type != Token_LeftParenthesis);
+		switch(Result->Token.Type)
+		{
+			case Token_Minus:
+				{
+					Result->Token.Operator = Op_UnaryMin;
+				} break;
+			case Token_BitNot:
+				{
+					Result->Token.Operator = Op_UnaryBitNot;
+				} break;
+			InvalidDefaultCase;
+		}
 
 		Result->Left = ParseInteger(Lexer);
 	}
@@ -170,7 +181,36 @@ ParseExpr1(lexer* Lexer)
 		ast* LeftExpr = Result;
 		Result = AllocateStruct(ast);
 		Result->Token = ReadToken(Lexer);
-		Assert(Result->Token.Type != Token_LeftParenthesis);
+
+		switch(Result->Token.Type)
+		{
+			case Token_Mul:
+				{
+					Result->Token.Operator = Op_Mul;
+				} break;
+			case Token_Div:
+				{
+					Result->Token.Operator = Op_Div;
+				} break;
+			case Token_Mod:
+				{
+					Result->Token.Operator = Op_Mod;
+				} break;
+			case Token_LeftShift:
+				{
+					Result->Token.Operator = Op_LeftShift;
+				} break;
+			case Token_RightShift:
+				{
+					Result->Token.Operator = Op_RightShift;
+				} break;
+			case Token_BitAnd:
+				{
+					Result->Token.Operator = Op_BitAnd;
+				} break;
+			InvalidDefaultCase;
+		}
+
 		Result->Left = LeftExpr;
 		Result->Right = ParseExpr2(Lexer);
 	}
@@ -183,14 +223,35 @@ ParseExpr0(lexer* Lexer)
 	ast* Result = ParseExpr1(Lexer);
 
 	while(IsToken(Lexer, Token_Add) ||
-			IsToken(Lexer, Token_BinaryMinus) ||
+			IsToken(Lexer, Token_Minus) ||
 			IsToken(Lexer, Token_BitOr) ||
 			IsToken(Lexer, Token_BitXor))
 	{
 		ast* LeftExpr = Result;
 		Result = AllocateStruct(ast);
 		Result->Token = ReadToken(Lexer);
-		Assert(Result->Token.Type != Token_LeftParenthesis);
+
+		switch(Result->Token.Type)
+		{
+			case Token_Add:
+				{
+					Result->Token.Operator = Op_Add;
+				} break;
+			case Token_Minus:
+				{
+					Result->Token.Operator = Op_Sub;
+				} break;
+			case Token_BitOr:
+				{
+					Result->Token.Operator = Op_BitOr;
+				} break;
+			case Token_BitXor:
+				{
+					Result->Token.Operator = Op_BitXor;
+				} break;
+			InvalidDefaultCase;
+		}
+
 		Result->Left = LeftExpr;
 		Result->Right = ParseExpr1(Lexer);
 	}

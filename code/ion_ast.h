@@ -193,8 +193,7 @@ PrintAst(ast* Ast)
 			{
 				printf("^ ");
 			} break;
-		case Token_UnaryMinus:
-		case Token_BinaryMinus:
+		case Token_Minus:
 			{
 				printf("- ");
 			} break;

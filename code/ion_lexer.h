@@ -19,8 +19,7 @@ enum token_type
 	Token_BitAnd,
 	Token_BitOr,
 	Token_BitXor,
-	Token_UnaryMinus,
-	Token_BinaryMinus,
+	Token_Minus,
 	Token_Exp,
 
 	Token_Count,
@@ -78,69 +77,6 @@ struct token
 	};
 };
 
-internal operator_type
-GetOperatorType(token_type Token)
-{
-	switch(Token)
-	{
-		case Token_Mul:
-			{
-				return(Op_Mul);
-			} break;
-		case Token_Div:
-			{
-				return(Op_Div);
-			} break;
-		case Token_Add:
-			{
-				return(Op_Add);
-			} break;
-		case Token_BitNot:
-			{
-				return(Op_UnaryBitNot);
-			} break;
-		case Token_Mod:
-			{
-				return(Op_Mod);
-			} break;
-		case Token_LeftShift:
-			{
-				return(Op_LeftShift);
-			} break;
-		case Token_RightShift:
-			{
-				return(Op_RightShift);
-			} break;
-		case Token_BitAnd:
-			{
-				return(Op_BitAnd);
-			} break;
-		case Token_BitOr:
-			{
-				return(Op_BitOr);
-			} break;
-		case Token_BitXor:
-			{
-				return(Op_BitXor);
-			} break;
-		case Token_UnaryMinus:
-			{
-				return(Op_UnaryMin);
-			} break;
-		case Token_BinaryMinus:
-			{
-				return(Op_Sub);
-			} break;
-		case Token_Exp:
-			{
-				return(Op_Exp);
-			} break;
-		InvalidDefaultCase;
-	}
-	Assert(false);
-	return(Op_Count);
-}
-
 global_variable ion_operator OpTable[Op_Count] = 
 {
 	{Op_UnaryMin,    2, OpProp_Unary, false},
@@ -161,30 +97,6 @@ global_variable ion_operator OpTable[Op_Count] =
 	{Op_Exp,         1, OpProp_Binary, false},
 };
 
-internal ion_operator
-GetOperator(token_type Token)
-{
-	ion_operator Result = {};
-	operator_type OpType = GetOperatorType(Token);
-	Result = OpTable[OpType];
-
-	return(Result);
-}
-
-inline precedence
-OpPrecedence(token Token)
-{
-	precedence Result = OpTable[Token.Operator].Precedence;
-	return(Result);
-}
-
-inline bool
-IsLeftAssociative(token Token)
-{
-	bool Result = OpTable[Token.Operator].IsLeftAssociative;
-	return(Result);
-}
-
 inline bool
 IsOperator(token Token)
 {
@@ -198,8 +110,7 @@ IsOperator(token Token)
 			Token.Type == Token_BitAnd ||
 			Token.Type == Token_BitOr ||
 			Token.Type == Token_BitXor ||
-			Token.Type == Token_UnaryMinus ||
-			Token.Type == Token_BinaryMinus ||
+			Token.Type == Token_Minus ||
 			Token.Type == Token_Exp);
 	return(Result);
 }
@@ -209,20 +120,6 @@ IsParenthesis(token Token)
 {
 	bool Result = (Token.Type == Token_LeftParenthesis ||
 			Token.Type == Token_RightParenthesis);
-	return(Result);
-}
-
-inline bool
-IsBinary(token Token)
-{
-	bool Result = (OpTable[Token.Operator].Property == OpProp_Binary);
-	return(Result);
-}
-
-inline bool
-IsUnary(token Token)
-{
-	bool Result = (OpTable[Token.Operator].Property == OpProp_Unary);
 	return(Result);
 }
 
@@ -384,19 +281,7 @@ GetToken(tokenizer* Tokenizer)
 			} break;
 		case '-':
 			{
-				// NOTE(hugo): IMPORTANT(hugo):
-				// This works even for the first token
-				// because an uninitialized token will have the type
-				// Token_EndOfStream which is not an operator.
-				if(IsOperator(Tokenizer->PreviousToken) ||
-						IsParenthesis(Tokenizer->PreviousToken))
-				{
-					Token.Type = Token_UnaryMinus;
-				}
-				else
-				{
-					Token.Type = Token_BinaryMinus;
-				}
+				Token.Type = Token_Minus;
 			} break;
 		case '(':
 			{
@@ -430,13 +315,6 @@ GetToken(tokenizer* Tokenizer)
 
 		
 	}
-
-	if(IsOperator(Token))
-	{
-		Token.Operator = GetOperatorType(Token.Type);
-	}
-
-	Tokenizer->PreviousToken = Token;
 	return(Token);
 }
 
