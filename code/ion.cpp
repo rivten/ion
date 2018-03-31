@@ -27,7 +27,7 @@ s32 main(s32 Arguments, char** ArgumentCount)
 	char* Str2 = "1 + (2 + 3) * 2";
 	printf("%s = %i\n", Str2, IonEvaluate(Str2));
 
-	char* Str3 = "10 % 4 + (2 + 3) * 2";
+	char* Str3 = "5 - 1 - 2";
 	printf("%s = %i\n", Str3, IonEvaluate(Str3));
 
 	u8* Bytecode = IonGenerateBytecode(Ast);
