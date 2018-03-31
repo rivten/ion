@@ -1,5 +1,7 @@
 #pragma once
 
+#define RECURSIVE_DESCENT 1
+#if !RECURSIVE_DESCENT
 internal bool
 ShouldPopStack(token CurrentToken, token TopStackToken)
 {
@@ -96,6 +98,120 @@ IonParse(char* Str)
 
 	return(Ast);
 }
+
+#else // if RECURSIVE_DESCENT
+
+// E0 -> E1 ([+, -, |, ^] E1)+
+// E1 -> E2 ([*, /, %, <<, >>, &] E2)+
+// E2 -> (E0) | E3
+// E3 -> [-, ~]+ V
+// V -> Number
+
+internal ast*
+ParseInteger(lexer* Lexer)
+{
+	ast* Result = AllocateStruct(ast);
+	Result->Token = ExpectToken(Lexer, Token_Integer);
+	return(Result);
+}
+
+internal ast*
+ParseExpr3(lexer* Lexer)
+{
+	ast* Result = 0;
+	if(IsToken(Lexer, Token_UnaryMinus) ||
+			IsToken(Lexer, Token_BitNot))
+	{
+		Result = AllocateStruct(ast);
+		Result->Token = ReadToken(Lexer);
+		Assert(Result->Token.Type != Token_LeftParenthesis);
+
+		Result->Left = ParseInteger(Lexer);
+	}
+	else
+	{
+		Result = ParseInteger(Lexer);
+	}
+	Assert(Result);
+	return(Result);
+}
+
+internal ast* ParseExpr0(lexer* Lexer);
+
+internal ast*
+ParseExpr2(lexer* Lexer)
+{
+	ast* Result = 0;
+	if(MatchToken(Lexer, Token_LeftParenthesis))
+	{
+		Result = ParseExpr0(Lexer);
+		ExpectToken(Lexer, Token_RightParenthesis);
+	}
+	else
+	{
+		Result = ParseExpr3(Lexer);
+	}
+
+	return(Result);
+}
+
+internal ast*
+ParseExpr1(lexer* Lexer)
+{
+	ast* Result = ParseExpr2(Lexer);
+
+	while(IsToken(Lexer, Token_Mul) ||
+			IsToken(Lexer, Token_Div) ||
+			IsToken(Lexer, Token_Mod) ||
+			IsToken(Lexer, Token_LeftShift) ||
+			IsToken(Lexer, Token_RightShift) ||
+			IsToken(Lexer, Token_BitAnd))
+	{
+		ast* LeftExpr = Result;
+		Result = AllocateStruct(ast);
+		Result->Token = ReadToken(Lexer);
+		Assert(Result->Token.Type != Token_LeftParenthesis);
+		Result->Left = LeftExpr;
+		Result->Right = ParseExpr2(Lexer);
+	}
+	return(Result);
+}
+
+internal ast*
+ParseExpr0(lexer* Lexer)
+{
+	ast* Result = ParseExpr1(Lexer);
+
+	while(IsToken(Lexer, Token_Add) ||
+			IsToken(Lexer, Token_BinaryMinus) ||
+			IsToken(Lexer, Token_BitOr) ||
+			IsToken(Lexer, Token_BitXor))
+	{
+		ast* LeftExpr = Result;
+		Result = AllocateStruct(ast);
+		Result->Token = ReadToken(Lexer);
+		Assert(Result->Token.Type != Token_LeftParenthesis);
+		Result->Left = LeftExpr;
+		Result->Right = ParseExpr1(Lexer);
+	}
+
+	return(Result);
+}
+
+internal ast*
+IonParse(char* Str)
+{
+	lexer Lexer = {};
+	Lexer.Tokenizer = {};
+	Lexer.Tokenizer.At = Str;
+
+	InitLexer(&Lexer);
+
+	ast* Result = ParseExpr0(&Lexer);
+	//ExpectToken(&Lexer, Token_EndOfStream);
+	return(Result);
+}
+#endif
 
 internal s32
 IonEvaluate(char* Str)

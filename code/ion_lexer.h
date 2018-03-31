@@ -240,6 +240,9 @@ struct tokenizer
 	// E -> Integer
 	// B -> any binary operator
 	// U -> any unary operator
+
+	// TODO(hugo): Get rid of that
+	// since now I have a lexer
 	token PreviousToken;
 };
 
@@ -437,3 +440,50 @@ GetToken(tokenizer* Tokenizer)
 	return(Token);
 }
 
+struct lexer
+{
+	token Token;
+	tokenizer Tokenizer;
+};
+
+internal token
+ReadToken(lexer* Lexer)
+{
+	token Result = Lexer->Token;
+	Lexer->Token = GetToken(&Lexer->Tokenizer);
+	return(Result);
+}
+
+internal bool
+MatchToken(lexer* Lexer, token_type TokenType)
+{
+	bool Match = (TokenType == Lexer->Token.Type);
+	if(Match)
+	{
+		ReadToken(Lexer);
+	}
+
+	return(Match);
+}
+
+internal token
+ExpectToken(lexer* Lexer, token_type TokenType)
+{
+	token Result = Lexer->Token;
+	Assert(Result.Type == TokenType);
+	ReadToken(Lexer);
+	return(Result);
+}
+
+internal void
+InitLexer(lexer* Lexer)
+{
+	ReadToken(Lexer);
+}
+
+internal bool
+IsToken(lexer* Lexer, token_type TokenType)
+{
+	bool Result = (Lexer->Token.Type == TokenType);
+	return(Result);
+}
